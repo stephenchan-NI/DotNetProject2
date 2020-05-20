@@ -30,10 +30,29 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
 
         void StartGeneration()
         {
-
+ //           string rfsgName = resourceNameComboBox.Text;
+ //           double freq = (double)frequencyNumeric.Value;
+ //           double power = (double)powerLevelNumeric.Value;
         }
         void LoadWaveforms()
         {
+            //Creates folder selection box
+            FolderBrowserDialog scriptSelect = new FolderBrowserDialog();
+            scriptSelect.Description = "All your TDMS are belong to us";
+            scriptSelect.ShowDialog();
+
+            //tdmsFiles contains the path for all files in the directory selected by the user
+            string[] tdmsFiles = Directory.GetFiles(scriptSelect.SelectedPath, "*.tdms");
+
+            //Section below parses and loads waveform names into lsvWaveforms
+            List<string> fileName = new List<String>();
+            foreach(string tdmsPath in tdmsFiles)
+            {
+                //Split file path, find name. 
+                string[] pathComps = tdmsPath.Split('\\', '.');
+                //File names with more than one period at the end will break this, but honestly who does that ??
+                lsvWaveforms.Items.Add(pathComps[pathComps.Length - 2]);
+            }
 
         }
 
