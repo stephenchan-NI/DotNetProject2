@@ -5,12 +5,15 @@ using System.Text;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using NationalInstruments.ModularInstruments.SystemServices.DeviceServices;
+using NationalInstruments.ModularInstruments.NIRfsgPlayback;
+using NationalInstruments.ModularInstruments.NIRfsg;
 
 namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
 {
     public partial class MainForm : Form
     {
-
+        NIRfsg rfsgSession;
+        IntPtr rfsgHandle;
         public MainForm()
         {
             InitializeComponent();
@@ -30,9 +33,13 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
 
         void StartGeneration()
         {
- //           string rfsgName = resourceNameComboBox.Text;
- //           double freq = (double)frequencyNumeric.Value;
- //           double power = (double)powerLevelNumeric.Value;
+            string rfsgName = resourceNameComboBox.Text;
+            double freq = (double)frequencyNumeric.Value;
+            double power = (double)powerLevelNumeric.Value;
+
+            rfsgSession = new NIRfsg(rfsgName, true, false);
+            rfsgHandle = rfsgSession.GetInstrumentHandle().DangerousGetHandle();
+
         }
         void LoadWaveforms()
         {
@@ -50,8 +57,29 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
             {
                 //Split file path, find name. 
                 string[] pathComps = tdmsPath.Split('\\', '.');
-                //File names with more than one period at the end will break this, but honestly who does that ??
-                lsvWaveforms.Items.Add(pathComps[pathComps.Length - 2]);
+                //If TDMS file, add to list view
+                if (pathComps[pathComps.Length - 1] == "tdms") 
+                {
+                    lsvWaveforms.Items.Add(pathComps[pathComps.Length - 2]);
+                    try
+                    {
+                        NIRfsgPlayback.ReadAndDownloadWaveformFromFile;
+                    }
+                    catch()
+                    {
+
+                    }
+                }
+
+            }
+
+            //
+            foreach (string tdmsPath in tdmsFiles)
+            {
+                NIRfsgPlayback.ReadSampleRateFromFile;
+                NIRfsgPlayback.
+                NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, "waveforms");
+                NIRfsgPlayback.SetScriptToGenerateSingleRfsg(rfsgHandle, script);
             }
 
         }
