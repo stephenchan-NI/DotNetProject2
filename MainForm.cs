@@ -7,13 +7,14 @@ using System.Windows.Forms;
 using NationalInstruments.ModularInstruments.SystemServices.DeviceServices;
 using NationalInstruments.ModularInstruments.NIRfsgPlayback;
 using NationalInstruments.ModularInstruments.NIRfsg;
+using System.Linq;
 
 namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
 {
     public partial class MainForm : Form
     {
-        NIRfsg rfsgSession;
-        IntPtr rfsgHandle;
+        private NIRfsg rfsgSession;
+        private IntPtr rfsgHandle;
         public MainForm()
         {
             InitializeComponent();
@@ -51,35 +52,63 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
             //tdmsFiles contains the path for all files in the directory selected by the user
             string[] tdmsFiles = Directory.GetFiles(scriptSelect.SelectedPath, "*.tdms");
 
-            //Section below parses and loads waveform names into lsvWaveforms
-            List<string> fileName = new List<String>();
+            //Foreach loop parses and loads waveform names into lsvWaveforms and RFSGplayback library
+            List<string> fileName = new List<string>();
+            List<string> sampleRates = new List<string>();
+            int wfmsLoaded = 0;
+
             foreach(string tdmsPath in tdmsFiles)
             {
                 //Split file path, find name. 
                 string[] pathComps = tdmsPath.Split('\\', '.');
-                //If TDMS file, add to list view
+                //If TDMS file extension found
                 if (pathComps[pathComps.Length - 1] == "tdms") 
                 {
-                    lsvWaveforms.Items.Add(pathComps[pathComps.Length - 2]);
+                    //Try to load wfm into RFSG playback library, read sample rate, and then add name to waveform box
                     try
                     {
-                        NIRfsgPlayback.ReadAndDownloadWaveformFromFile;
+                        NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, "waveforms");
+                        NIRfsgPlayback.ReadSampleRateFromFile(tdmsPath, 0, out double sampleRate);
+                        sampleRates.Add(sampleRate.ToString());
+                        wfmsLoaded++;
+                        lsvWaveforms.Items.Add(pathComps[pathComps.Length - 2]);
                     }
-                    catch()
+                    catch(Exception er)
                     {
-
+                        //If exception is thrown for invalid TDMS file (error -303804), catch the exception but do nothing
+                        if (er.Message.Contains("Error code: -303804"))
+                        {
+                            //Do nothing
+                        }
+                        //For any other exception, throw it
+                        else
+                        {
+                            throw(er); 
+                        }
                     }
                 }
-
             }
+            
+
+            //Check the number of waveforms loaded
+            if (wfmsLoaded == 0)
+            {
+                throw new FileNotFoundException("No valid TDMS files found in specified directory.");
+            }
+            //Check sampleRates for distinct values. If there are more than 1 distinct value, throw exception)
+            if (sampleRates.Distinct().Count() > 1)
+            {
+                throw new Exception("Different sample rates for each file detected. Ensure all TDMS waveforms use same sample rate.");
+            }
+
 
             //
             foreach (string tdmsPath in tdmsFiles)
             {
-                NIRfsgPlayback.ReadSampleRateFromFile;
-                NIRfsgPlayback.
-                NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, "waveforms");
-                NIRfsgPlayback.SetScriptToGenerateSingleRfsg(rfsgHandle, script);
+//                NIRfsgPlayback.ReadSampleRateFromFile;
+//                NIRfsgPlayback.
+//                NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, "waveforms");
+//                NIRfsgPlayback.SetScriptToGenerateSingleRfsg(rfsgHandle, scriptText );
             }
 
         }
