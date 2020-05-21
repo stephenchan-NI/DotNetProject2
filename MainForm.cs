@@ -15,10 +15,10 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
     {
         private NIRfsg rfsgSession;
         private IntPtr rfsgHandle;
+        private List<string> tdmsFilePaths = new List<string>();
         public MainForm()
         {
             InitializeComponent();
-
             LoadRfsgDeviceNames();
         }
 
@@ -40,7 +40,12 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
 
             rfsgSession = new NIRfsg(rfsgName, true, false);
             rfsgHandle = rfsgSession.GetInstrumentHandle().DangerousGetHandle();
-
+            foreach (string tdmsPath in tdmsFilePaths)
+            {
+                NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, "waveforms");
+            }
+            rfsgSession.RF.Configure(freq, power);
+            rfsgSession.Initiate();
         }
         void LoadWaveforms()
         {
@@ -53,7 +58,6 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
             string[] tdmsFiles = Directory.GetFiles(scriptSelect.SelectedPath, "*.tdms");
 
             //Foreach loop parses and loads waveform names into lsvWaveforms and RFSGplayback library
-            List<string> fileName = new List<string>();
             List<string> sampleRates = new List<string>();
             int wfmsLoaded = 0;
 
@@ -67,11 +71,12 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
                     //Try to load wfm into RFSG playback library, read sample rate, and then add name to waveform box
                     try
                     {
-                        NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, "waveforms");
                         NIRfsgPlayback.ReadSampleRateFromFile(tdmsPath, 0, out double sampleRate);
+
                         sampleRates.Add(sampleRate.ToString());
                         wfmsLoaded++;
                         lsvWaveforms.Items.Add(pathComps[pathComps.Length - 2]);
+                        tdmsFilePaths.Add(tdmsPath);
                     }
                     catch(Exception er)
                     {
@@ -100,17 +105,6 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
             {
                 throw new Exception("Different sample rates for each file detected. Ensure all TDMS waveforms use same sample rate.");
             }
-
-
-            //
-            foreach (string tdmsPath in tdmsFiles)
-            {
-//                NIRfsgPlayback.ReadSampleRateFromFile;
-//                NIRfsgPlayback.
-//                NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, "waveforms");
-//                NIRfsgPlayback.SetScriptToGenerateSingleRfsg(rfsgHandle, scriptText );
-            }
-
         }
 
         void CheckGeneration()
@@ -176,6 +170,11 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
             powerLevelNumeric.Enabled = enabled;
 
             Application.DoEvents();
+        }
+
+        private string generateScript(int timeToWaitNumeric)
+        {
+            return(""); 
         }
     }
 }
