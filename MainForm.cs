@@ -13,9 +13,12 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
 {
     public partial class MainForm : Form
     {
+        
         private NIRfsg rfsgSession;
         private IntPtr rfsgHandle;
         private List<string> tdmsFilePaths = new List<string>();
+        private List<string> tdmsWaveformNames = new List<string>();
+        private double iqRate;
         public MainForm()
         {
             InitializeComponent();
@@ -37,75 +40,121 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
             string rfsgName = resourceNameComboBox.Text;
             double freq = (double)frequencyNumeric.Value;
             double power = (double)powerLevelNumeric.Value;
-
-            rfsgSession = new NIRfsg(rfsgName, true, false);
-            rfsgHandle = rfsgSession.GetInstrumentHandle().DangerousGetHandle();
-            foreach (string tdmsPath in tdmsFilePaths)
+            try
             {
-                NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, "waveforms");
+                rfsgSession = new NIRfsg(rfsgName, true, false);
+                rfsgHandle = rfsgSession.GetInstrumentHandle().DangerousGetHandle();
+                int i = 0;
+                foreach (string tdmsPath in tdmsFilePaths)
+                {
+                    NIRfsgPlayback.ReadAndDownloadWaveformFromFile(rfsgHandle, tdmsPath, tdmsWaveformNames[i]);
+                    i++;
+                }
+                //Q: Is it acceptable to utilize mostly private class data and keep prototype empty? I suppose if I don't aniticpate any reuse I can leave it empty...
+                string autoScript = ScriptGen();
+                NIRfsgPlayback.SetScriptToGenerateSingleRfsg(rfsgHandle, autoScript);
+                rfsgSession.RF.Configure(freq, power);
+                rfsgSession.Initiate();
             }
-            rfsgSession.RF.Configure(freq, power);
-            rfsgSession.Initiate();
+            catch (Exception uhOh)
+            {
+                ShowError("Start Generation", uhOh);
+            }
         }
         void LoadWaveforms()
         {
             //Creates folder selection box
             FolderBrowserDialog scriptSelect = new FolderBrowserDialog();
             scriptSelect.Description = "All your TDMS are belong to us";
-            scriptSelect.ShowDialog();
-
-            //tdmsFiles contains the path for all files in the directory selected by the user
-            string[] tdmsFiles = Directory.GetFiles(scriptSelect.SelectedPath, "*.tdms");
-
-            //Foreach loop parses and loads waveform names into lsvWaveforms and RFSGplayback library
-            List<string> sampleRates = new List<string>();
-            int wfmsLoaded = 0;
-
-            foreach(string tdmsPath in tdmsFiles)
+            try
             {
-                //Split file path, find name. 
-                string[] pathComps = tdmsPath.Split('\\', '.');
-                //If TDMS file extension found
-                if (pathComps[pathComps.Length - 1] == "tdms") 
-                {
-                    //Try to load wfm into RFSG playback library, read sample rate, and then add name to waveform box
-                    try
-                    {
-                        NIRfsgPlayback.ReadSampleRateFromFile(tdmsPath, 0, out double sampleRate);
+                scriptSelect.ShowDialog();
 
-                        sampleRates.Add(sampleRate.ToString());
-                        wfmsLoaded++;
-                        lsvWaveforms.Items.Add(pathComps[pathComps.Length - 2]);
-                        tdmsFilePaths.Add(tdmsPath);
-                    }
-                    catch(Exception er)
+                //tdmsFiles contains the path for all files in the directory selected by the user
+                string[] tdmsFiles = Directory.GetFiles(scriptSelect.SelectedPath, "*.tdms");
+
+                //Foreach loop parses and loads waveform names into lsvWaveforms and RFSGplayback library
+                List<string> sampleRates = new List<string>();
+                int wfmsLoaded = 0;
+
+                foreach (string tdmsPath in tdmsFiles)
+                {
+                    //Split file path, find name. 
+                    string[] pathComps = tdmsPath.Split('\\', '.');
+                    //If TDMS file extension found
+                    if (pathComps[pathComps.Length - 1] == "tdms")
                     {
-                        //If exception is thrown for invalid TDMS file (error -303804), catch the exception but do nothing
-                        if (er.Message.Contains("Error code: -303804"))
+                        //Try to load wfm into RFSG playback library, read sample rate, and then add name to waveform box
+                        try
                         {
-                            //Do nothing
+                            NIRfsgPlayback.ReadSampleRateFromFile(tdmsPath, 0, out double sampleRate);
+                            sampleRates.Add(sampleRate.ToString());
+                            wfmsLoaded++;
+                            lsvWaveforms.Items.Add(pathComps[pathComps.Length - 2]);
+                            //Adding to list because I don't know how to get items from lsvWaveforms...
+                            tdmsWaveformNames.Add(pathComps[pathComps.Length - 2]);
+                            tdmsFilePaths.Add(tdmsPath);
                         }
-                        //For any other exception, throw it
-                        else
+                        catch (Exception er)
                         {
-                            throw(er); 
+                            //If exception is thrown for invalid TDMS file (error -303804), catch the exception but do nothing
+                            if (er.Message.Contains("Error code: -303804"))
+                            {
+                                //Do nothing
+                            }
+                            //For any other exception, throw it
+                            else
+                            {
+                                throw (er);
+                            }
                         }
                     }
                 }
-            }
-            
 
-            //Check the number of waveforms loaded
-            if (wfmsLoaded == 0)
-            {
-                throw new FileNotFoundException("No valid TDMS files found in specified directory.");
+
+                //Check the number of waveforms loaded
+                if (wfmsLoaded == 0)
+                {
+                    throw new FileNotFoundException("No valid TDMS files found in specified directory.");
+                }
+                //Check sampleRates for distinct values. If there are more than 1 distinct value, throw exception)
+                if (sampleRates.Distinct().Count() > 1)
+                {
+                    throw new Exception("Different sample rates for each file detected. Ensure all TDMS waveforms use same sample rate.");
+                }
+                else
+                {
+                    iqRate = double.Parse(sampleRates[0]);
+                }
             }
-            //Check sampleRates for distinct values. If there are more than 1 distinct value, throw exception)
-            if (sampleRates.Distinct().Count() > 1)
+            catch
             {
-                throw new Exception("Different sample rates for each file detected. Ensure all TDMS waveforms use same sample rate.");
+                //Show Error
             }
+        
         }
+
+        private string ScriptGen()
+        {
+            double waitSamples = Decimal.ToDouble(timeToWaitNumeric.Value) * iqRate;
+            StringBuilder script = new StringBuilder("script myScript\n\trepeat forever\n");
+            foreach (string waveform in tdmsWaveformNames)
+            {
+                script.Append("\t\tgenerate " + waveform + "\n\t\t");
+                script.Append("wait " + waitSamples.ToString() + "\n");
+            }
+            script.Append("\tend repeat\nend script");
+            return script.ToString();
+        }
+        //script myScript 
+        //  repeat forever
+        //      generate waveform1
+  //            wait 500
+//		        generate waveform 2
+    //          wait 500
+		//       …
+	   //   end repeat
+   //   end script
 
         void CheckGeneration()
         { 
@@ -114,6 +163,21 @@ namespace NationalInstruments.Examples.ArbitraryWaveformGeneration
 
         void StopGeneration()
         {
+
+            try
+            {
+                if (rfsgSession != null)
+                {
+                    rfsgSession.Abort();
+                    rfsgSession.RF.OutputEnabled = false;
+                    rfsgSession.Close();
+                    rfsgSession = null;
+                }
+            }
+            catch (Exception ohNo)
+            {
+                ShowError("StopGeneration", ohNo);
+            }
             // Stop the status checking timer 
             EnableControls(true);
 
